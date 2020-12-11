@@ -22,8 +22,6 @@ import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 class UnsafeConfigurationResolutionDeprecationIntegrationTest extends AbstractDependencyResolutionTest {
     @ToBeFixedForConfigurationCache(because = "Task.getProject() during execution")
     def "deprecation warning when configuration in another project is resolved unsafely"() {
-        mavenRepo.module("test", "test-jar", "1.0").publish()
-
         settingsFile << """
             rootProject.name = "foo"
             include ":bar"
@@ -37,33 +35,22 @@ class UnsafeConfigurationResolutionDeprecationIntegrationTest extends AbstractDe
             }
 
             project(':bar') {
-                repositories {
-                    maven { url '${mavenRepo.uri}' }
-                }
-
                 configurations {
                     bar
-                }
-
-                dependencies {
-                    bar "test:test-jar:1.0"
                 }
             }
         """
 
         when:
-        executer.expectDeprecationWarning()
         executer.withArgument("--parallel")
-        succeeds(":resolve")
+        fails(":resolve")
 
         then:
-        outputContains("The configuration :bar:bar was resolved without accessing the project in a safe manner.")
+        failureCauseContains("The configuration :bar:bar was resolved from a context different than the project context.")
     }
 
     @ToBeFixedForConfigurationCache
     def "exception when configuration is resolved from a non-gradle thread"() {
-        mavenRepo.module("test", "test-jar", "1.0").publish()
-
         settingsFile << """
             rootProject.name = "foo"
             include(':bar')
@@ -83,16 +70,8 @@ class UnsafeConfigurationResolutionDeprecationIntegrationTest extends AbstractDe
             }
 
             project(':bar') {
-                repositories {
-                    maven { url '${mavenRepo.uri}' }
-                }
-
                 configurations {
                     bar
-                }
-
-                dependencies {
-                    bar "test:test-jar:1.0"
                 }
             }
         """
@@ -107,8 +86,6 @@ class UnsafeConfigurationResolutionDeprecationIntegrationTest extends AbstractDe
     }
 
     def "deprecation warning when configuration is resolved while evaluating a different project"() {
-        mavenRepo.module("test", "test-jar", "1.0").publish()
-
         settingsFile << """
             rootProject.name = "foo"
             include ":bar", ":baz"
@@ -116,16 +93,8 @@ class UnsafeConfigurationResolutionDeprecationIntegrationTest extends AbstractDe
 
         buildFile << """
             project(':baz') {
-                repositories {
-                    maven { url '${mavenRepo.uri}' }
-                }
-
                 configurations {
                     baz
-                }
-
-                dependencies {
-                    baz "test:test-jar:1.0"
                 }
             }
 
@@ -135,12 +104,11 @@ class UnsafeConfigurationResolutionDeprecationIntegrationTest extends AbstractDe
         """
 
         when:
-        executer.expectDeprecationWarning()
         executer.withArgument("--parallel")
-        succeeds(":bar:help")
+        fails(":bar:help")
 
         then:
-        outputContains("The configuration :baz:baz was resolved without accessing the project in a safe manner.")
+        failureCauseContains("The configuration :baz:baz was resolved from a context different than the project context.")
     }
 
     def "no deprecation warning when configuration is resolved while evaluating same project"() {
